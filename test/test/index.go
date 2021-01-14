@@ -8,14 +8,14 @@ import (
 	"io"
 	"time"
 
-	"github.com/gopherjs/gopherjs/js"
-	"github.com/gopherjs/websocket"
-	"github.com/gopherjs/websocket/websocketjs"
 	"github.com/rusco/qunit"
+	"github.com/tj10200/websocket"
+	"github.com/tj10200/websocket/websocketjs"
+	"syscall/js"
 )
 
 func getWSBaseURL() string {
-	document := js.Global.Get("window").Get("document")
+	document := js.Global().Get("window").Get("document")
 	location := document.Get("location")
 
 	wsProtocol := "ws"
@@ -52,26 +52,54 @@ func main() {
 			return nil
 		}
 
-		ws.AddEventListener("open", false, func(ev *js.Object) {
+		ws.AddEventListener("open", false, js.FuncOf(func(_this js.Value, args []js.Value) interface {} {
 			qunit.Ok(true, "WebSocket opened")
-		})
+			return nil
+		}))
 
-		ws.AddEventListener("close", false, func(ev *js.Object) {
+		ws.AddEventListener("close", false, js.FuncOf(func(_this js.Value, args []js.Value) interface {} {
 			const (
 				CloseNormalClosure    = 1000
 				CloseNoStatusReceived = 1005 // IE10 hates it when the server closes without sending a close reason
 			)
 
+			if len(args) != 1 {
+				err := fmt.Errorf("wrong number of args received. 1 expected: (len - %d)", len(args))
+				qunit.Ok(false, err.Error())
+				return err.Error()
+			}
+
+			ev := args[0]
+			if !ev.Truthy() {
+				err := fmt.Errorf("ev arg undefined")
+				qunit.Ok(false, err.Error())
+				return err.Error()
+			}
+
+			if !ev.Get("code").Truthy() {
+				err := fmt.Errorf("ev.code undefined")
+				qunit.Ok(false, err.Error())
+				return err.Error()
+			}
+
+			if !ev.Get("code").InstanceOf(js.ValueOf(42)) {
+				err := fmt.Errorf("ev.code not numeric: %s", ev.Get("code").String())
+				qunit.Ok(false, err.Error())
+				return err.Error()
+			}
+
 			closeEventCode := ev.Get("code").Int()
 
 			if closeEventCode != CloseNormalClosure && closeEventCode != CloseNoStatusReceived {
-				qunit.Ok(false, fmt.Sprintf("WebSocket close was not clean (code %d)", closeEventCode))
+				err := fmt.Errorf("WebSocket close was not clean (code %d)", closeEventCode)
+				qunit.Ok(false, err.Error())
 				qunit.Start()
-				return
+				return err.Error()
 			}
 			qunit.Ok(true, "WebSocket closed")
 			qunit.Start()
-		})
+			return nil
+		}))
 
 		return nil
 	})
@@ -107,7 +135,7 @@ func main() {
 
 			ws, err := websocket.Dial(wsBaseURL + "404-not-found")
 			if err == nil {
-				ws.Close()
+				_ = ws.Close()
 				qunit.Ok(false, "Got no error, but expected an error in opening the WebSocket.")
 				return
 			}
@@ -174,7 +202,12 @@ func main() {
 			qunit.Ok(true, "WebSocket opened")
 
 			start := time.Now()
-			ws.SetReadDeadline(start.Add(1 * time.Second))
+			err = ws.SetReadDeadline(start.Add(1 * time.Second))
+			if err != nil {
+				qunit.Ok(false, fmt.Sprintf("SetReadDeadline error: %s", err))
+				_ = ws.Close()
+				return
+			}
 
 			_, err = ws.Read(nil)
 			if err != nil && err.Error() == "i/o timeout: deadline reached" {
