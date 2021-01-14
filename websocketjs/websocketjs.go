@@ -30,7 +30,7 @@ such as adding event listeners with callbacks.
 */
 package websocketjs
 
-import "github.com/gopherjs/gopherjs/js"
+import "syscall/js"
 
 // ReadyState represents the state that a WebSocket is in. For more information
 // about the available states, see
@@ -81,10 +81,10 @@ func New(url string) (ws *WebSocket, err error) {
 		}
 	}()
 
-	object := js.Global.Get("WebSocket").New(url)
+	object := js.Global().Get("WebSocket").New(url)
 
 	ws = &WebSocket{
-		Object: object,
+		Value: object,
 	}
 
 	return
@@ -94,7 +94,7 @@ func New(url string) (ws *WebSocket, err error) {
 // object. For more information, see
 // http://dev.w3.org/html5/websockets/#the-websocket-interface
 type WebSocket struct {
-	*js.Object
+	js.Value
 
 	URL string `js:"url"`
 
@@ -113,12 +113,12 @@ type WebSocket struct {
 // AddEventListener provides the ability to bind callback
 // functions to the following available events:
 // open, error, close, message
-func (ws *WebSocket) AddEventListener(typ string, useCapture bool, listener func(*js.Object)) {
+func (ws *WebSocket) AddEventListener(typ string, useCapture bool, listener js.Func) {
 	ws.Call("addEventListener", typ, listener, useCapture)
 }
 
 // RemoveEventListener removes a previously bound callback function
-func (ws *WebSocket) RemoveEventListener(typ string, useCapture bool, listener func(*js.Object)) {
+func (ws *WebSocket) RemoveEventListener(typ string, useCapture bool, listener js.Func) {
 	ws.Call("removeEventListener", typ, listener, useCapture)
 }
 
@@ -141,7 +141,7 @@ func (ws *WebSocket) Send(data interface{}) (err error) {
 			panic(e)
 		}
 	}()
-	ws.Object.Call("send", data)
+	ws.Value.Call("send", data)
 	return
 }
 
@@ -164,7 +164,7 @@ func (ws *WebSocket) Close() (err error) {
 	// Use close code closeNormalClosure to indicate that the purpose
 	// for which the connection was established has been fulfilled.
 	// See https://tools.ietf.org/html/rfc6455#section-7.4.
-	ws.Object.Call("close", closeNormalClosure)
+	ws.Value.Call("close", closeNormalClosure)
 	return
 }
 
